@@ -3,14 +3,16 @@
   "version": "0.3.0",
   "description": "Node.js and Bun wrapper for arboOCR — runs the prebuilt arboocr_demo binary as a subprocess, no C++ build required.",
   "license": "Apache-2.0",
+  "author": "wafik",
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "src"],
   "engines": {
     "node": ">=18"
   },
@@ -18,8 +20,22 @@
     "type": "git",
     "url": "git+https://github.com/ARBO-TEAM/arbo-ocr-js.git"
   },
+  "bugs": {
+    "url": "https://github.com/ARBO-TEAM/arbo-ocr-js/issues"
+  },
   "homepage": "https://arbo-team.github.io/arbo-ocr-docs/latest/wrappers/js/",
-  "keywords": ["ocr", "onnx", "paddleocr", "text-recognition", "bun"],
+  "keywords": [
+    "ocr",
+    "onnx",
+    "onnxruntime",
+    "paddleocr",
+    "pp-ocrv6",
+    "text-recognition",
+    "text-detection",
+    "document-ai",
+    "bun",
+    "typescript"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "tsc && node --test",

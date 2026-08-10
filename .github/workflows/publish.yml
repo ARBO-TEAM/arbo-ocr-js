@@ -1,0 +1,47 @@
+name: Publish
+
+# Publishes on a version tag. Kept separate from ci.yml, and with no
+# concurrency group, so a release is never cancelled by a later push.
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for npm provenance: npm exchanges this OIDC token for a
+      # signed attestation linking the tarball to this workflow run and
+      # commit. Without it, --provenance fails rather than silently skipping.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: npm ci
+
+      # Publishing something that was never run is how a broken package ships.
+      # This is the same end-to-end test CI runs: real download, real image.
+      - name: Verify before publishing
+        env:
+          ARBO_OCR_TEST_IMAGE: receipt.jpg
+        run: |
+          curl -sfL -o receipt.jpg \
+            https://raw.githubusercontent.com/wafik/ArboOCR/main/tests/fixtures/test_images/INDONESIAN_RECEIPT_ZZ_2025041400001.jpg
+          npm test
+
+      # Guards against tagging v0.4.0 while package.json still says 0.3.0 —
+      # npm would happily publish the stale version under a misleading tag.
+      - name: Tag must match package.json version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          [ "$tag" = "$pkg" ] || { echo "tag $tag != package.json $pkg"; exit 1; }
+
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
