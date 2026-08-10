@@ -9,8 +9,13 @@ package downloads a prebuilt `arboocr_demo` binary on first use and runs it as
 a subprocess, parsing its JSON output.
 
 ```bash
-npm install arbo-ocr-js     # or: bun add arbo-ocr-js
+npm install github:ARBO-TEAM/arbo-ocr-js
+# or
+bun add github:ARBO-TEAM/arbo-ocr-js
 ```
+
+> Not on the npm registry yet — install from GitHub. The `prepare` script builds
+> `dist/` on install, so a git install works the same as a registry one.
 
 ```ts
 import { Engine } from "arbo-ocr-js";

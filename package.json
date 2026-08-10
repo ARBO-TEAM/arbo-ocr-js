@@ -23,7 +23,7 @@
   "scripts": {
     "build": "tsc",
     "test": "tsc && node --test",
-    "prepublishOnly": "tsc"
+    "prepare": "tsc"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
