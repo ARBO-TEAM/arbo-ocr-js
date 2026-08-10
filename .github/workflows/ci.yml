@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**/*.md']
+  pull_request:
+    branches: [main]
+    paths-ignore: ['**/*.md']
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The unit tests never spawn the binary, so they are the fast signal and run
+  # on the oldest supported Node — package.json claims >=18, and nothing here
+  # should quietly start depending on a newer built-in.
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '18' }
+      - run: npm ci
+      - run: npm test
+
+  # The point of this job: prove the download-and-extract path works on a real
+  # machine of each platform. Extraction shells out to tar, and the two
+  # platforms take different code paths through it — GNU tar on the Linux
+  # .tar.gz, System32 bsdtar on the Windows .zip. Neither is covered by any
+  # test that does not actually run.
+  e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        runtime: [node, bun]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: oven-sh/setup-bun@v2
+        if: matrix.runtime == 'bun'
+      - run: npm ci
+
+      - name: Fetch a test image
+        shell: bash
+        run: |
+          curl -sfL -o receipt.jpg \
+            https://raw.githubusercontent.com/wafik/ArboOCR/main/tests/fixtures/test_images/INDONESIAN_RECEIPT_ZZ_2025041400001.jpg
+
+      - name: End-to-end (${{ matrix.runtime }})
+        shell: bash
+        env:
+          ARBO_OCR_TEST_IMAGE: receipt.jpg
+        run: |
+          npx tsc
+          if [ "${{ matrix.runtime }}" = "bun" ]; then
+            bun test
+          else
+            node --test
+          fi
