@@ -1,7 +1,7 @@
 {
   "name": "arbo-ocr-js",
-  "version": "0.3.0",
-  "description": "Node.js and Bun wrapper for arboOCR — runs the prebuilt arboocr_demo binary as a subprocess, no C++ build required.",
+  "version": "0.3.1",
+  "description": "OCR for Node.js and Bun — extract text and layout from images and scanned documents. Zero dependencies, no native build, optional CUDA/TensorRT.",
   "license": "Apache-2.0",
   "author": "wafik",
   "type": "module",

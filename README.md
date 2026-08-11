@@ -1,12 +1,12 @@
 # arbo-ocr-js
 
-Node.js and Bun wrapper for [arboOCR](https://github.com/wafik/ArboOCR) — a
-standalone C++ OCR engine (detection, orientation, recognition) built on
-PP-OCRv6 ONNX models.
+[![npm](https://img.shields.io/npm/v/arbo-ocr-js?style=flat-square)](https://www.npmjs.com/package/arbo-ocr-js)
+[![license](https://img.shields.io/npm/l/arbo-ocr-js?style=flat-square)](LICENSE)
 
-No C++ toolchain, no vcpkg, no CMake, and **no runtime dependencies**. The
-package downloads a prebuilt `arboocr_demo` binary on first use and runs it as
-a subprocess, parsing its JSON output.
+**Extract text from images in Node.js and Bun.** Text detection, orientation
+correction, and recognition, on CPU or GPU.
+
+No compiler, no `node-gyp`, no Python, and **zero runtime dependencies**.
 
 ```bash
 npm install arbo-ocr-js     # or: bun add arbo-ocr-js
@@ -24,8 +24,27 @@ for (const line of page.lines) {
 }
 ```
 
-That is the whole setup. The binary and the OCR model weights both download
-themselves on first run and are cached afterwards.
+That is the whole setup — no model files to download by hand, no service to
+run. The engine binary and the OCR weights fetch themselves on first use and
+are cached afterwards.
+
+Each line comes back with its text, a confidence score, and a 4-point polygon;
+set `wordBoxes` for per-word boxes (per-character for CJK).
+
+Under the hood it drives [arboOCR](https://github.com/wafik/ArboOCR), a
+standalone C++ engine running PP-OCRv6 ONNX models, as a subprocess and parses
+its JSON. That design is why there is nothing to build — and it has a real
+cost, [stated plainly below](#the-trade-off-stated-honestly).
+
+## Languages
+
+The recognizer weights are multilingual in a single file — **50 languages**:
+Chinese, English, Japanese, and 46 Latin-script languages. `tiny` covers the
+same set **without** Japanese.
+
+There is deliberately no `language` option. The model already handles all of
+them, so a language selector would either do nothing or invite you to pick the
+wrong one.
 
 ## Requirements
 
