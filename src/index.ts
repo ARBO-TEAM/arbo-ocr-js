@@ -6,7 +6,10 @@
  */
 
 import { execFile } from "node:child_process";
-import { stat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { ensureInstalled } from "./installer.js";
@@ -201,6 +204,74 @@ export class Engine {
   }
 
   /**
+   * Recognizes many images in a **single** `arboocr_demo` process, via
+   * `--images-from`. Results come back in the same order as `imagePaths`.
+   *
+   * This is the reason to prefer it over a loop of {@link recognize}: that loop
+   * pays a process spawn plus a full model load per image. On a 40-image SROIE
+   * sample that overhead measured ~134 ms/image — about 30% of wall time at
+   * `modelType: "tiny"`. One spawn amortizes it across the whole list.
+   *
+   * ```ts
+   * const pages = await engine.recognizeBatch(["a.jpg", "b.jpg"]);
+   * pages[0].lines // ← a.jpg, always
+   * ```
+   *
+   * An image that yields no text is a normal entry with `lines: []`, not an
+   * error — matching {@link PageResult}. Every input gets exactly one output
+   * entry, including unreadable files.
+   *
+   * @param imagePaths Paths to recognize. An empty array returns `[]` without
+   *   spawning anything.
+   * @throws {OcrError} if the binary cannot run, emits non-JSON, or returns a
+   *   different number of results than there were inputs.
+   */
+  async recognizeBatch(imagePaths: string[]): Promise<PageResult[]> {
+    if (imagePaths.length === 0) return [];
+
+    // The list file is newline-delimited and the binary treats blank lines and
+    // `#` lines as comments, so a path in either shape would be silently
+    // dropped and shift every later result onto the wrong input. Rejecting
+    // beats mis-attributing text to the wrong file.
+    imagePaths.forEach(rejectUnlistablePath);
+
+    const listFile = join(tmpdir(), `arbo-ocr-js-${process.pid}-${randomUUID()}.txt`);
+    let stdout: string;
+    try {
+      await writeFile(listFile, `${imagePaths.join("\n")}\n`, "utf8");
+      // A batch exits 1 when *any* image came back empty, which is an ordinary
+      // outcome here rather than a failure, so tolerate it when stdout still
+      // holds the JSON we asked for.
+      stdout = await this.#run(["--images-from", listFile, "--json"], { tolerateExit1: true });
+    } finally {
+      await rm(listFile, { force: true }).catch(() => {});
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(stdout);
+    } catch {
+      throw new OcrError(
+        `arboocr_demo --json produced unparseable output: ${stdout.slice(0, 500)}`,
+      );
+    }
+    if (!Array.isArray(parsed)) {
+      throw new OcrError(`arboocr_demo --images-from returned ${typeof parsed}, expected an array`);
+    }
+    // Results are matched to inputs by position — the `image` field carries
+    // only a basename, so two same-named files in different directories would
+    // be indistinguishable. Positional matching is only sound if the counts
+    // agree, so treat a mismatch as fatal rather than returning a shifted list.
+    if (parsed.length !== imagePaths.length) {
+      throw new OcrError(
+        `arboocr_demo returned ${parsed.length} results for ${imagePaths.length} images; ` +
+          `cannot match results to inputs by position`,
+      );
+    }
+    return parsed as PageResult[];
+  }
+
+  /**
    * Runs `arboocr_demo --download-models` to fetch the weights for this
    * engine's `ocrVersion`/`modelType` into arboOCR's model cache, then returns
    * — the binary downloads and exits without doing any OCR.
@@ -215,7 +286,7 @@ export class Engine {
     await this.#run(["--download-models"]);
   }
 
-  async #run(baseArgs: string[]): Promise<string> {
+  async #run(baseArgs: string[], { tolerateExit1 = false } = {}): Promise<string> {
     const bin = await this.binaryPath();
     const args = [...baseArgs, ...flagsFrom(this.config)];
 
@@ -226,7 +297,21 @@ export class Engine {
       const { stdout } = await execFileAsync(bin, args, { maxBuffer: MAX_BUFFER });
       return stdout.trim();
     } catch (err) {
-      const e = err as NodeJS.ErrnoException & { code?: number | string; stderr?: string };
+      // Not NodeJS.ErrnoException: it pins `code` to string, and execFile
+      // reports a process exit status as a number. Intersecting the two makes
+      // `code === 1` a type error.
+      const e = err as Error & {
+        code?: number | string;
+        stderr?: string;
+        stdout?: string;
+      };
+      // The binary overloads exit 1: "a page had no text" and "you passed a bad
+      // flag" share it. Only the first leaves JSON on stdout, so requiring a
+      // JSON-shaped payload keeps a usage error an error.
+      if (tolerateExit1 && e.code === 1) {
+        const out = e.stdout?.trim();
+        if (out && (out.startsWith("[") || out.startsWith("{"))) return out;
+      }
       if (typeof e.code === "number") {
         throw new OcrError(`arboocr_demo exited with code ${e.code}`, {
           exitCode: e.code,
@@ -235,6 +320,28 @@ export class Engine {
       }
       throw new OcrError(`could not start process: ${e.message}`, { stderr: e.stderr });
     }
+  }
+}
+
+/**
+ * Rejects a path that cannot survive a round trip through the newline-delimited
+ * `--images-from` list file. Exported for tests.
+ */
+export function rejectUnlistablePath(path: string, index: number): void {
+  if (typeof path !== "string" || path === "") {
+    throw new OcrError(`recognizeBatch: imagePaths[${index}] is empty`);
+  }
+  if (/[\r\n]/.test(path)) {
+    throw new OcrError(
+      `recognizeBatch: imagePaths[${index}] contains a newline, which the image list ` +
+        `format cannot represent: ${JSON.stringify(path)}`,
+    );
+  }
+  if (path.trimStart().startsWith("#")) {
+    throw new OcrError(
+      `recognizeBatch: imagePaths[${index}] starts with '#', which arboocr_demo reads as ` +
+        `a comment and would skip: ${JSON.stringify(path)}`,
+    );
   }
 }
 
