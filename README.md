@@ -66,6 +66,12 @@ your code
 arbo-ocr-js ── spawn ──► arboocr_demo --image page.jpg --json
     ▲                            │
     └───── JSON on stdout ───────┘
+
+    │  await new Engine({...}).recognizeBatch(["a.jpg", "b.jpg"])
+    ▼
+arbo-ocr-js ── spawn ──► arboocr_demo --images-from list.txt --json
+    ▲             once            │   (models load once, not per image)
+    └──── JSON array on stdout ───┘
 ```
 
 This is the same design as the [Python](https://github.com/ARBO-TEAM/arbo-ocr-python),
@@ -78,12 +84,25 @@ This is the same design as the [Python](https://github.com/ARBO-TEAM/arbo-ocr-py
 
 You pay a process spawn on every `recognize()` call — roughly **130–320 ms per
 image** on top of inference time, because each call reloads the ONNX models
-from scratch. There is no warm in-process engine and no batching.
+from scratch. There is no warm in-process engine.
 
-What you get for it: an install that is one line long and works on a machine
-with no compiler. That is the right trade for scripting, queue workers, and web
-backends where a request already costs tens of milliseconds. If it is not the
-right trade for you, use the C++ library directly.
+**If you have more than one image, use [`recognizeBatch`](#enginerecognizebatchimagepaths-promisepageresult)** —
+it spawns once for the whole list, so the model load is paid once instead of N
+times. Measured on 20 SROIE receipts at `modelType: "tiny"`:
+
+| | total | per image |
+|---|---:|---:|
+| `recognize()` in a loop | 7290 ms | 364 ms |
+| `recognizeBatch()` | **4365 ms** | **218 ms** |
+
+1.67× faster, byte-identical text. 218 ms/image is essentially the engine's own
+inference time, so batching removes nearly all of the wrapper's overhead.
+
+What you get for the subprocess design: an install that is one line long and
+works on a machine with no compiler. That is the right trade for scripting,
+queue workers, and web backends where a request already costs tens of
+milliseconds. If you need a warm engine for *single* images on a hot path, use
+the C++ library directly.
 
 ## API
 
@@ -116,6 +135,31 @@ interface LineResult {
 
 Rejects with an `OcrError` (carrying `exitCode` and `stderr`) if the process
 cannot start, exits non-zero, or emits output that is not JSON.
+
+### `engine.recognizeBatch(imagePaths): Promise<PageResult[]>`
+
+Runs OCR on many images in **one** process. Prefer this whenever you have more
+than one image — see [the trade-off](#the-trade-off-stated-honestly) for the
+numbers.
+
+```ts
+const pages = await engine.recognizeBatch(["a.jpg", "b.jpg", "c.jpg"]);
+pages[0].lines; // ← a.jpg, always
+```
+
+- **Results are positional.** `pages[i]` is always `imagePaths[i]`. Do not match
+  on `PageResult.image` — it carries only a basename, so two same-named files in
+  different directories are indistinguishable.
+- **Every input gets exactly one entry**, including unreadable files, which come
+  back as a normal result with `lines: []`. One bad path does not discard the
+  rest of the batch.
+- An empty array returns `[]` without spawning anything.
+- Rejects with an `OcrError` if a path contains a newline or begins with `#`
+  (the image-list format cannot represent either), or if the binary returns a
+  different number of results than there were inputs.
+
+Batching only removes the *per-image* process and model-load cost. It does not
+change recognition — output is identical to calling `recognize()` in a loop.
 
 ### `engine.ensureModels(): Promise<void>`
 
