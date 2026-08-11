@@ -11,9 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Required for npm provenance: npm exchanges this OIDC token for a
-      # signed attestation linking the tarball to this workflow run and
-      # commit. Without it, --provenance fails rather than silently skipping.
+      # The whole authentication story. npm exchanges this OIDC token for a
+      # short-lived publish credential (trusted publishing) and for the signed
+      # provenance attestation. There is deliberately no NPM_TOKEN secret —
+      # nothing long-lived to leak, rotate, or pick the wrong type of.
       id-token: write
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +22,14 @@ jobs:
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing needs npm >= 11.5.1. Node 22 ships npm 10.x, which
+      # authenticates the old way and fails with a 404/403 that reads like a
+      # permissions problem rather than a version one. Upgrade before publish.
+      - name: Upgrade npm for OIDC support
+        run: |
+          npm install -g npm@latest
+          npm --version
 
       - run: npm ci
 
@@ -42,6 +51,9 @@ jobs:
           pkg="$(node -p "require('./package.json').version")"
           [ "$tag" = "$pkg" ] || { echo "tag $tag != package.json $pkg"; exit 1; }
 
+      # No NODE_AUTH_TOKEN: authentication comes from the OIDC exchange above.
+      # This requires a trusted publisher configured on npmjs.com for this
+      # package, pointing at this repository and this workflow filename.
+      # Provenance is implied by trusted publishing; passing it explicitly
+      # makes the run fail loudly rather than quietly publishing unsigned.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
