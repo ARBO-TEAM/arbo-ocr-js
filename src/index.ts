@@ -99,6 +99,14 @@ export interface Config {
   recBatchNum?: number;
   /** Longest image side for detection resize. CLI default 960. */
   detLimitSideLen?: number;
+  /**
+   * Drop det boxes at or below this area in detector-input pixels. A set `0`
+   * disables the cut — `0` is a real value here, not "unset" — so this is
+   * emitted whenever it is not `undefined`. CLI default 20.
+   *
+   * arboOCR >= v0.4.0.
+   */
+  minDetBoxArea?: number;
 
   useAngleCls?: boolean;
   useCuda?: boolean;
@@ -109,6 +117,14 @@ export interface Config {
   wordBoxes?: boolean;
   /** Fail instead of fetching a missing model — the flag form of `ARBOOCR_OFFLINE=1`. */
   noDownload?: boolean;
+  /**
+   * Emit the inter-word spaces a greedy CTC decode swallows. arboOCR >= v0.4.0.
+   */
+  spaceRecovery?: boolean;
+  /**
+   * Leave the ORT CPU memory arena on: faster, higher RSS. arboOCR >= v0.4.0.
+   */
+  enableCpuMemArena?: boolean;
 }
 
 const STRING_FLAGS = {
@@ -127,6 +143,7 @@ const NUMBER_FLAGS = {
   minConfidence: "min-confidence",
   recBatchNum: "rec-batch-num",
   detLimitSideLen: "det-limit-side-len",
+  minDetBoxArea: "min-det-box-area",
 } as const;
 
 const BOOL_FLAGS = {
@@ -137,6 +154,22 @@ const BOOL_FLAGS = {
   useClahe: "clahe",
   wordBoxes: "word-boxes",
   noDownload: "no-download",
+} as const;
+
+/**
+ * Booleans that exist only in arboOCR >= v0.4.0, emitted truthy-only.
+ *
+ * These cannot ride {@link BOOL_FLAGS}: that map emits any non-`undefined`
+ * value, and `arboocr_demo`'s cxxopts exits 1 on an unknown option. Since this
+ * package lets `binPath` point at a pre-v0.4.0 binary, `--flag=false` — which
+ * is indistinguishable from leaving the flag off, because false is the
+ * binary's own default — would still be an unrecognized option and break it.
+ * So emit a single `--flag=true` token only for an explicit `true`, and put
+ * nothing at all on argv for `false` or `undefined`.
+ */
+const V040_BOOL_FLAGS = {
+  spaceRecovery: "space-recovery",
+  enableCpuMemArena: "enable-cpu-mem-arena",
 } as const;
 
 /**
@@ -365,6 +398,11 @@ export function flagsFrom(config: Config): string[] {
   for (const [key, flag] of Object.entries(BOOL_FLAGS)) {
     const value = config[key as keyof typeof BOOL_FLAGS];
     if (value !== undefined) flags.push(`--${flag}=${value}`);
+  }
+  // v0.4.0-only, opt-in-only — see V040_BOOL_FLAGS for why `false` emits
+  // nothing rather than `--flag=false`.
+  for (const [key, flag] of Object.entries(V040_BOOL_FLAGS)) {
+    if (config[key as keyof typeof V040_BOOL_FLAGS] === true) flags.push(`--${flag}=true`);
   }
 
   return flags;

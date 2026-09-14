@@ -179,6 +179,14 @@ Every field is optional. **An unset field emits no CLI flag at all**, leaving
 the binary's own default in place — which is what lets you point `binPath` at an
 older arboOCR release without tripping over flags it does not know.
 
+The three rows marked **v0.4.0+** are the exception that proves the rule: they
+are new in arboOCR v0.4.0, so each is emitted **only when you opt in**.
+`minDetBoxArea` goes to argv when you set it at all — including `0`, which is a
+meaningful value that disables the box-area cut. `spaceRecovery` and
+`enableCpuMemArena` emit `--flag=true` for an explicit `true` and nothing at all
+for `false` or unset, since `false` is the binary's own default and a
+pre-v0.4.0 binary would reject the option outright.
+
 | Field | Type | Notes |
 |---|---|---|
 | `binPath` | `string` | Explicit binary path; unset = auto-download |
@@ -190,12 +198,15 @@ older arboOCR release without tripping over flags it does not know.
 | `minConfidence` | `number` | Drop lines below this score. CLI default 0.5; `0` disables filtering |
 | `recBatchNum` | `number` | Crops per inference call. CLI default 6 |
 | `detLimitSideLen` | `number` | Longest side for detection resize. CLI default 960 |
+| `minDetBoxArea` | `number` | **v0.4.0+** Drop det boxes at or below this area in detector-input pixels. CLI default 20; `0` disables the cut |
 | `useAngleCls` | `boolean` | Rotated-text classification |
 | `useCuda` / `useTensorrt` / `useFp16` | `boolean` | See [GPU](#gpu) |
 | `useClahe` | `boolean` | Contrast enhancement for faded documents |
 | `wordBoxes` | `boolean` | Adds `line.words` — larger JSON, off by default |
 | `noDownload` | `boolean` | Fail instead of fetching a missing model |
 | `modelsUrl` | `string` | Fetch missing models from an internal mirror |
+| `spaceRecovery` | `boolean` | **v0.4.0+** Emit the inter-word spaces a greedy CTC decode swallows |
+| `enableCpuMemArena` | `boolean` | **v0.4.0+** Leave the ORT CPU memory arena on: faster, higher RSS |
 
 ## Models
 
@@ -232,8 +243,11 @@ confirms which one you got.
 This package pins release **v0.4.0**. `v0.3.0` was the first release whose
 archive ships `onnxruntime_providers_shared` — earlier archives could not load
 a GPU provider at all on either platform, and the engine fell back to CPU
-silently. `v0.4.0` keeps that and adds ppu-style recognition batching plus
-`--min-det-box-area`, `--space-recovery` and `--enable-cpu-mem-arena`.
+silently. `v0.4.0` keeps that and adds ppu-style recognition batching plus three
+flags this package passes through as the config fields `minDetBoxArea`,
+`spaceRecovery` and `enableCpuMemArena` — all three require
+arboOCR >= v0.4.0 and are emitted only when you set them, so an older `binPath`
+never sees them.
 
 ## Binary cache
 
