@@ -21,14 +21,19 @@ const REPO = "wafik/ArboOCR";
  * Bumping this also changes the cache directory (see {@link ensureInstalled}) —
  * that is deliberate, not incidental.
  *
- * v0.3.0 is the release that added model auto-download, so the binary this
- * downloads understands `--no-download` / `--models-url` / `--download-models`
- * and the `ARBOOCR_OFFLINE` / `ARBOOCR_CACHE_DIR` / `ARBOOCR_MODELS_URL`
- * environment variables. It is also the first release to ship
+ * v0.3.0 added model auto-download, so the binary this downloads understands
+ * `--no-download` / `--models-url` / `--download-models` and the
+ * `ARBOOCR_OFFLINE` / `ARBOOCR_CACHE_DIR` / `ARBOOCR_MODELS_URL` environment
+ * variables. It is also the first release to ship
  * `onnxruntime_providers_shared`, without which `useCuda` / `useTensorrt` could
  * not load a GPU execution provider from a release archive at all.
+ *
+ * v0.4.0 is the current pin: it adds ppu-style recognition batching plus
+ * `--min-det-box-area`, `--space-recovery` and `--enable-cpu-mem-arena`.
+ * Everything v0.3.0 provided is still present, so no flag this package emits
+ * changed meaning.
  */
-export const PINNED_VERSION = "v0.3.0";
+export const PINNED_VERSION = "v0.4.0";
 
 /** How long {@link ensureInstalled} waits for the release asset. */
 const DOWNLOAD_TIMEOUT_MS = 120_000;
