@@ -229,16 +229,18 @@ Requesting a provider is not the same as getting one. The engine falls back to
 CPU when CUDA or TensorRT is unavailable, so `backend` is the only thing that
 confirms which one you got.
 
-This package pins release **v0.3.0**, the first release whose archive ships
-`onnxruntime_providers_shared`. Earlier archives could not load a GPU provider
-at all on either platform — the engine fell back to CPU silently.
+This package pins release **v0.4.0**. `v0.3.0` was the first release whose
+archive ships `onnxruntime_providers_shared` — earlier archives could not load
+a GPU provider at all on either platform, and the engine fell back to CPU
+silently. `v0.4.0` keeps that and adds ppu-style recognition batching plus
+`--min-det-box-area`, `--space-recovery` and `--enable-cpu-mem-arena`.
 
 ## Binary cache
 
 | Platform | Location |
 |---|---|
-| Windows | `%LOCALAPPDATA%\arbo-ocr-js\v0.3.0\windows-x64\` |
-| Linux | `$XDG_CACHE_HOME/arbo-ocr-js/v0.3.0/linux-x64/` (or `~/.cache/...`) |
+| Windows | `%LOCALAPPDATA%\arbo-ocr-js\v0.4.0\windows-x64\` |
+| Linux | `$XDG_CACHE_HOME/arbo-ocr-js/v0.4.0/linux-x64/` (or `~/.cache/...`) |
 
 The version is a path segment on purpose. The extracted binary has the same
 name in every release, so a version-less path would report a stale binary as
